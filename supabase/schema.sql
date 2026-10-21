@@ -57,3 +57,8 @@ alter table public.pets enable row level security;
 alter table public.adoption_applications enable row level security;
 revoke all on public.pets, public.adoption_applications from anon, authenticated;
 grant all on public.pets, public.adoption_applications to service_role;
+
+-- Public bucket for pet photos (the app also creates it automatically on first upload).
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('pet-images', 'pet-images', true, 5242880, array['image/jpeg','image/png','image/webp','image/avif','image/gif'])
+on conflict (id) do update set public = true;

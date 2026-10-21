@@ -22,6 +22,42 @@ export default function AdminPanel() {
   const [tab, setTab] = useState("pets");
   const [editingPet, setEditingPet] = useState(null);
   const [petForm, setPetForm] = useState(emptyPet);
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState("");
+  const [fileInputKey, setFileInputKey] = useState(0);
+
+  useEffect(() => () => { if (imagePreview.startsWith("blob:")) URL.revokeObjectURL(imagePreview); }, [imagePreview]);
+
+  function resetImage() {
+    setImageFile(null); setImagePreview(""); setFileInputKey((key) => key + 1);
+  }
+
+  function pickImage(event) {
+    const file = event.target.files?.[0];
+    setError("");
+    if (!file) { setImageFile(null); setImagePreview(""); return; }
+    if (!file.type.startsWith("image/")) { setError("Elegí un archivo de imagen."); event.target.value = ""; return; }
+    if (file.size > 5 * 1024 * 1024) { setError("La imagen debe pesar menos de 5 MB."); event.target.value = ""; return; }
+    setImageFile(file); setImagePreview(URL.createObjectURL(file));
+  }
+
+  async function uploadImage(file) {
+    const response = await fetch("/api/admin/upload", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contentType: file.type, size: file.size }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "No pudimos preparar la subida de la imagen.");
+    const form = new FormData();
+    form.append("cacheControl", "31536000");
+    form.append("", file);
+    const upload = await fetch(data.uploadUrl, { method: "PUT", headers: { "x-upsert": "false" }, body: form });
+    if (!upload.ok) {
+      const detail = await upload.json().catch(() => ({}));
+      throw new Error(`No pudimos subir la imagen${detail.message ? `: ${detail.message}` : "."}`);
+    }
+    return data.publicUrl;
+  }
 
   const loadApplications = useCallback(async () => {
     const response = await fetch("/api/adoptions", { cache: "no-store" });
@@ -71,7 +107,10 @@ export default function AdminPanel() {
   async function savePet(event) {
     event.preventDefault(); setBusy(true); setError(""); setSuccess("");
     const payload = Object.fromEntries(new FormData(event.currentTarget));
+    delete payload.imageFile;
     try {
+      if (!imageFile && !petForm.imageUrl) throw new Error("Elegí una foto para la mascota.");
+      payload.imageUrl = imageFile ? await uploadImage(imageFile) : petForm.imageUrl;
       const response = await fetch(editingPet ? `/api/pets/${editingPet.id}` : "/api/pets", {
         method: editingPet ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
@@ -79,14 +118,14 @@ export default function AdminPanel() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "No pudimos guardar la mascota.");
       await loadPets();
-      setPetForm(emptyPet); setEditingPet(null);
+      setPetForm(emptyPet); setEditingPet(null); resetImage();
       setSuccess(editingPet ? "Actualizamos la ficha." : "La mascota ya está publicada.");
     } catch (issue) { setError(issue.message); }
     finally { setBusy(false); }
   }
 
   function editPet(pet) {
-    setTab("pets"); setEditingPet(pet);
+    setTab("pets"); setEditingPet(pet); resetImage();
     setPetForm({ name: pet.name, species: pet.species, breed: pet.breed, age: String(pet.age), gender: pet.gender, size: pet.size, health: pet.health || "", description: pet.description, imageUrl: pet.imageUrl || pet.image || "" });
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -131,16 +170,16 @@ export default function AdminPanel() {
     {error && <p className="admin-error admin-feedback" role="alert">{error}</p>}{success && <p className="admin-success admin-feedback" role="status">{success}</p>}
 
     {tab === "pets" ? <>
-      <section className="pet-editor"><div className="pet-editor-heading"><div><span className="section-kicker">FICHAS DE ADOPCIÓN</span><h2>{editingPet ? `Editar a ${editingPet.name}` : "Sumar una mascota"}</h2><p>La imagen se guarda como URL en la base de datos; no subimos archivos al servidor.</p></div>{editingPet && <button className="admin-cancel" type="button" onClick={() => { setEditingPet(null); setPetForm(emptyPet); }}>Cancelar edición</button>}</div>
+      <section className="pet-editor"><div className="pet-editor-heading"><div><span className="section-kicker">FICHAS DE ADOPCIÓN</span><h2>{editingPet ? `Editar a ${editingPet.name}` : "Sumar una mascota"}</h2><p>La foto se sube a Supabase Storage y su link público queda guardado en la ficha.</p></div>{editingPet && <button className="admin-cancel" type="button" onClick={() => { setEditingPet(null); setPetForm(emptyPet); resetImage(); }}>Cancelar edición</button>}</div>
         <form className="pet-editor-form" onSubmit={savePet}>
           <label>Nombre<input name="name" required maxLength="80" value={petForm.name} onChange={(event) => setPetForm({ ...petForm, name: event.target.value })} placeholder="Nombre de la mascota"/></label>
           <div className="form-pair"><label>Especie<select name="species" value={petForm.species} onChange={(event) => setPetForm({ ...petForm, species: event.target.value })}><option>Perro</option><option>Gato</option></select></label><label>Edad<input name="age" type="number" min="0" max="30" required value={petForm.age} onChange={(event) => setPetForm({ ...petForm, age: event.target.value })} placeholder="Años"/></label></div>
           <div className="form-pair"><label>Raza<input name="breed" required maxLength="120" value={petForm.breed} onChange={(event) => setPetForm({ ...petForm, breed: event.target.value })} placeholder="Raza o mestizo"/></label><label>Género<select name="gender" value={petForm.gender} onChange={(event) => setPetForm({ ...petForm, gender: event.target.value })}><option>Hembra</option><option>Macho</option></select></label></div>
           <div className="form-pair"><label>Tamaño<select name="size" value={petForm.size} onChange={(event) => setPetForm({ ...petForm, size: event.target.value })}><option>Pequeño</option><option>Mediano</option><option>Grande</option></select></label><label>Salud<input name="health" maxLength="120" value={petForm.health} onChange={(event) => setPetForm({ ...petForm, health: event.target.value })} placeholder="Vacunada, sana…"/></label></div>
           <label>Descripción<textarea name="description" rows="3" required maxLength="1200" value={petForm.description} onChange={(event) => setPetForm({ ...petForm, description: event.target.value })} placeholder="Personalidad, cuidados y lo que la hace única"/></label>
-          <label>URL pública de imagen<input name="imageUrl" type="url" required value={petForm.imageUrl} onChange={(event) => setPetForm({ ...petForm, imageUrl: event.target.value })} placeholder="https://sitio.com/imagen.jpg"/><span className="form-hint">Usá una URL pública directa a una imagen HTTPS.</span></label>
-          {petForm.imageUrl && <div className="pet-image-preview"><img src={petForm.imageUrl} alt="Vista previa de la mascota"/><span>Vista previa</span></div>}
-          <button className="admin-primary" disabled={busy}>{busy ? "Guardando…" : editingPet ? "Guardar cambios" : "Publicar mascota"}</button>
+          <label>Foto de la mascota<input key={fileInputKey} name="imageFile" type="file" accept="image/jpeg,image/png,image/webp,image/avif,image/gif" required={!petForm.imageUrl} onChange={pickImage}/><span className="form-hint">{editingPet ? "Elegí una nueva foto solo si querés reemplazar la actual. " : ""}JPG, PNG, WEBP, AVIF o GIF, hasta 5 MB.</span></label>
+          {(imagePreview || petForm.imageUrl) && <div className="pet-image-preview"><img src={imagePreview || petForm.imageUrl} alt="Vista previa de la mascota"/><span>{imagePreview ? "Nueva foto (se sube al guardar)" : "Foto actual"}</span></div>}
+          <button className="admin-primary" disabled={busy}>{busy ? (imageFile ? "Subiendo foto…" : "Guardando…") : editingPet ? "Guardar cambios" : "Publicar mascota"}</button>
         </form>
       </section>
       {pets.length ? <section className="pet-admin-grid">{pets.map((pet) => <article className={`pet-admin-card ${!pet.isAvailable ? "paused" : ""}`} key={pet.id}><div className="pet-admin-image"><img src={pet.imageUrl || pet.image} alt={pet.name}/><span>{pet.isAvailable ? "Disponible" : "Pausada"}</span></div><div className="pet-admin-copy"><span className="section-kicker">{pet.species} · {pet.size}</span><h3>{pet.name}</h3><p>{pet.breed} · {pet.age} {pet.age === 1 ? "año" : "años"} · {pet.gender}</p><p className="pet-admin-description">{pet.description}</p><div className="pet-admin-actions"><button onClick={() => editPet(pet)}>Editar ficha</button><button className={pet.isAvailable ? "archive" : "restore"} onClick={() => toggleAvailability(pet)}>{pet.isAvailable ? "Pausar" : "Reactivar"}</button></div></div></article>)}</section> : <div className="admin-empty">Todavía no hay mascotas. Completá la ficha para publicar la primera.</div>}
