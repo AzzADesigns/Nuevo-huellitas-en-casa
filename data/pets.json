@@ -1,6 +1,54 @@
 [
-  {"id":"firulais","name":"Firulais","species":"Perro","breed":"Labrador","age":3,"gender":"Macho","size":"Mediano","description":"Un perro juguetón que ama correr en el parque.","health":"Sano","image":"/images/perro1.jpg"},
-  {"id":"mishi","name":"Mishi","species":"Gato","breed":"Persa","age":2,"gender":"Hembra","size":"Pequeño","description":"Gata tranquila que disfruta dormir al sol.","health":"Sana","image":"/images/gato2.jpg"},
-  {"id":"lola","name":"Lola","species":"Gato","breed":"Mestiza","age":1,"gender":"Hembra","size":"Pequeño","description":"Gatita curiosa y muy cariñosa.","health":"Sana","image":"/images/gato3.jpg"},
-  {"id":"rocky","name":"Rocky","species":"Perro","breed":"Pastor alemán","age":4,"gender":"Macho","size":"Grande","description":"Un compañero leal que disfruta los paseos y los juegos.","health":"Sano","image":"/images/perro5.jpg"}
+  {
+    "id": "firulais",
+    "name": "Firulais",
+    "species": "Perro",
+    "breed": "Labrador",
+    "age": 3,
+    "gender": "Macho",
+    "size": "Mediano",
+    "description": "Un perro juguetón que ama correr en el parque.",
+    "health": "Sano",
+    "image": "/images/perro1.jpg",
+    "isAvailable": true
+  },
+  {
+    "id": "mishi",
+    "name": "Mishi",
+    "species": "Gato",
+    "breed": "Persa",
+    "age": 2,
+    "gender": "Hembra",
+    "size": "Pequeño",
+    "description": "Gata tranquila que disfruta dormir al sol.",
+    "health": "Sana",
+    "image": "/images/gato2.jpg",
+    "isAvailable": true
+  },
+  {
+    "id": "lola",
+    "name": "Lola",
+    "species": "Gato",
+    "breed": "Mestiza",
+    "age": 1,
+    "gender": "Hembra",
+    "size": "Pequeño",
+    "description": "Gatita curiosa y muy cariñosa.",
+    "health": "Sana",
+    "image": "/images/gato3.jpg",
+    "isAvailable": true
+  },
+  {
+    "id": "rocky",
+    "name": "Rocky",
+    "species": "Perro",
+    "breed": "Pastor alemán",
+    "age": 4,
+    "gender": "Macho",
+    "size": "Grande",
+    "description": "Un compañero leal que disfruta los paseos y los juegos.",
+    "health": "Sano",
+    "image": "/images/perro5.jpg",
+    "isAvailable": true
+  }
 ]

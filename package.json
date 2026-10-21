@@ -6,10 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint .",
-    "seed:supabase": "node --env-file=.env.local scripts/seed-supabase.js"
+    "lint": "eslint ."
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.118.0",
     "next": "^16.4.2",
     "react": "^19.2.0",

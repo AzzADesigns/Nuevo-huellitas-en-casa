@@ -1,5 +1,6 @@
--- Run this script in the Supabase SQL Editor.
+-- Run this script in the Supabase SQL Editor. Safe to re-run.
 create extension if not exists pgcrypto;
+create extension if not exists pg_trgm;
 
 create table if not exists public.pets (
   id uuid primary key default gen_random_uuid(),
@@ -11,11 +12,23 @@ create table if not exists public.pets (
   size text not null check (size in ('Pequeño', 'Mediano', 'Grande')),
   description text not null,
   health_status text not null default 'A confirmar',
-  image_path text not null,
+  image_url text not null,
   is_available boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- Migrate projects that used the previous image_path (Storage) schema.
+alter table public.pets add column if not exists image_url text;
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'pets' and column_name = 'image_path'
+  ) then
+    alter table public.pets alter column image_path drop not null;
+  end if;
+end $$;
 
 create table if not exists public.adoption_applications (
   id uuid primary key default gen_random_uuid(),
@@ -33,6 +46,10 @@ create table if not exists public.adoption_applications (
 
 create index if not exists pets_available_species_idx
   on public.pets (species, created_at desc) where is_available = true;
+create index if not exists pets_available_name_trgm_idx
+  on public.pets using gin (name gin_trgm_ops) where is_available = true;
+create index if not exists pets_available_breed_trgm_idx
+  on public.pets using gin (breed gin_trgm_ops) where is_available = true;
 create index if not exists adoption_applications_created_at_idx
   on public.adoption_applications (created_at desc);
 
@@ -40,11 +57,3 @@ alter table public.pets enable row level security;
 alter table public.adoption_applications enable row level security;
 revoke all on public.pets, public.adoption_applications from anon, authenticated;
 grant all on public.pets, public.adoption_applications to service_role;
-
--- Pet photos are publicly viewable; uploads remain server-side using the secret key.
-insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('pet-images', 'pet-images', true, 5242880, array['image/jpeg','image/png','image/webp'])
-on conflict (id) do update set
-  public = excluded.public,
-  file_size_limit = excluded.file_size_limit,
-  allowed_mime_types = excluded.allowed_mime_types;

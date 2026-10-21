@@ -1,39 +1,40 @@
 # Huellitas en casa · Next.js fullstack
 
-Versión independiente del frontend original de adopción, migrada a Next.js App Router. Mantiene la composición que tenía el diseño: portada fotográfica con navegación naranja, bloque azul de presentación con fotos superpuestas, mascotas en filas alternadas, huellas decorativas y cierre ilustrado. Conserva la paleta `#1F485C` y `#F39C12`, el logo y las fotografías originales. Los ajustes se enfocan en legibilidad, espaciado, navegación móvil, accesibilidad y consistencia entre tamaños de pantalla.
+Aplicación de adopción en Next.js App Router. Conserva el diseño original, sus colores, imágenes editoriales, navegación flotante y catálogo de mascotas.
 
-## Requisitos y desarrollo
+## Desarrollo local
 
 - Node.js 20.9 o posterior.
 - `npm install`
 - `npm run dev` y abrir <http://localhost:3000>.
-- `npm run build` para compilar; `npm start` ejecuta la versión compilada.
+- `npm run lint` y `npm run build` para revisar el proyecto.
 
 ## Funcionalidad
 
-- Inicio con mascotas destacadas y catálogo en `/huellitas`, con búsqueda y filtros por especie.
-- Fichas con información de mascota y formulario para enviar interés de adopción.
-- Publicación de mascotas desde la navegación.
-- Panel privado de administración en `/admin`, con aprobación o rechazo de solicitudes.
-- API de Next.js: `GET/POST /api/pets` y `GET/POST /api/adoptions`.
-- Datos semilla en `data/pets.json`; las solicitudes se guardan en `data/adoptions.json`.
-- Imágenes originales reutilizadas desde `public/images`.
+- Inicio y catálogo en `/` y `/huellitas`.
+- Las fichas públicas muestran nombre, especie, raza, edad, género, tamaño, salud, descripción e imagen.
+- En `/huellitas`, las opciones de especie llegan desde `GET /api/pets`; la búsqueda por nombre o raza también se ejecuta en el servidor.
+- El formulario público envía solicitudes de adopción a `POST /api/adoptions`.
+- El dashboard privado en `/admin` permite crear, editar, pausar y reactivar mascotas, además de aprobar o rechazar solicitudes.
+- Los campos de cada mascota se validan en el servidor. La imagen se registra como una URL pública en `pets.image_url`; no se sube el archivo a Supabase Storage.
+- Los endpoints de escritura y los datos de mascotas pausadas requieren una sesión de administrador.
 
 ## Supabase
 
-El proyecto ya tiene un adaptador opcional para que las rutas `/api/pets` y `/api/adoptions` lean y escriban en Supabase cuando estén configuradas; sin credenciales, siguen usando JSON local para desarrollo. El catálogo envía especie y búsqueda a la API, que aplica esos filtros en el servidor.
+1. En el SQL Editor del proyecto ejecutá `supabase/schema.sql`. Crea las tablas, índices y reglas RLS; también añade `image_url` y vuelve opcional el antiguo `image_path` si habías ejecutado el esquema anterior.
+2. En el `.env.local` existente configurá `SUPABASE_URL` y `SUPABASE_SECRET_KEY` junto con `ADMIN_EMAIL`, `ADMIN_PASSWORD` y `ADMIN_SECRET`. No reemplaces el archivo completo si ya tiene tus credenciales de administrador.
+3. Reiniciá Next.js. Entrá a `/admin`, cargá cada mascota y pegá una URL HTTPS pública directa a su imagen. El catálogo y los filtros consultan la API, que lee y filtra en Supabase.
 
-1. Ejecutá `supabase/schema.sql` en el SQL Editor del proyecto. Crea `pets`, `adoption_applications` y el bucket público `pet-images`.
-2. Copiá `.env.example` a `.env.local` y completá `SUPABASE_URL` y `SUPABASE_SECRET_KEY`. La clave secreta solo se usa en las rutas del servidor; nunca la expongas como variable `NEXT_PUBLIC_*`.
-3. Ejecutá `npm run seed:supabase` para subir las cuatro fotos iniciales al Storage y guardar sus registros en PostgreSQL.
-4. Reiniciá Next.js. Desde entonces las mascotas, fotos y solicitudes usan Supabase.
+La app usa la clave `secret` solamente desde las rutas de Next.js en el servidor. La clave `publishable` no hace falta porque el navegador no conecta directamente con Supabase. No prefijes `SUPABASE_SECRET_KEY` con `NEXT_PUBLIC_` ni la publiques en Git.
 
-El script de seed se detiene si `pets` ya contiene registros, para no duplicarlos. Las imágenes del catálogo se resuelven desde Storage; las imágenes de identidad y diseño siguen siendo assets del frontend.
+Si migrás desde la configuración anterior de Storage, las fichas antiguas todavía pueden resolver su `image_path` mientras la imagen siga en el bucket `pet-images`. Las nuevas fichas guardan `image_url`; podés editar las antiguas desde el admin para pasarles una URL pública y dejar de depender del bucket.
 
-La API usa archivos JSON solo como fallback de desarrollo cuando Supabase no está configurado. La clave secreta de Supabase omite RLS, así que mantenela únicamente en el servidor y no la agregues al cliente; ver [seguridad de datos de Supabase](https://supabase.com/docs/guides/database/secure-data) y [políticas RLS](https://supabase.com/docs/guides/database/postgres/row-level-security).
+## Despliegue
 
-Para ingresar a `/admin`, usá el correo y la contraseña definidos en `.env.local`. La copia local ya incluye credenciales de desarrollo generadas para este proyecto; el archivo está excluido de Git. Al desplegar, configurá `ADMIN_EMAIL`, `ADMIN_PASSWORD` y `ADMIN_SECRET` como variables de entorno privadas.
+El proyecto está preparado para desplegarse en Vercel o en otro proveedor compatible con Next.js. Al conectar el repositorio, cargá en la configuración de entorno de producción las variables `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` y `ADMIN_SECRET`, aplicá `supabase/schema.sql` en Supabase y desplegá la rama `main`. Las credenciales de administrador son independientes de la cuenta de Supabase y se usan para iniciar sesión en `/admin`.
 
-## Análisis del repositorio de origen
+Para generar un `ADMIN_SECRET` fuerte localmente en Node.js podés usar `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`. No uses la contraseña de base de datos de Supabase como contraseña de administrador.
 
-El repositorio contiene el frontend en `frontend-app` (React 18, Vite, React Router y Tailwind). Las carpetas `frontend` y `backend` solo incluyen archivos de texto; no hay implementación Java del backend. El frontend original combinaba pantallas con datos de ejemplo y llamadas a un API desplegado aparte para autenticación, registro y adopciones. Esta migración conserva la experiencia visual y el flujo público de adopción con API local; no traslada los paneles autenticados que dependían de aquel servicio.
+## Origen
+
+El repositorio original contiene el frontend en `frontend-app` (React 18, Vite, React Router y Tailwind). Las carpetas `frontend` y `backend` solo incluyen archivos de texto; no hay implementación Java del backend. Esta versión migra la experiencia visual a Next.js y expone los flujos de catálogo, solicitudes y administración como rutas API propias.
