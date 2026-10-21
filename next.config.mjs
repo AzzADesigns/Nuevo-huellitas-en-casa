@@ -11,9 +11,19 @@ function getSupabaseHostname() {
 }
 
 const supabaseHostname = getSupabaseHostname();
+const storagePath = "/storage/v1/object/public/**";
+const remotePatterns = [{ protocol: "https", hostname: "**.supabase.co", pathname: storagePath }];
+if (supabaseHostname && !supabaseHostname.endsWith(".supabase.co")) {
+  remotePatterns.push({ protocol: "https", hostname: supabaseHostname, pathname: storagePath });
+}
+
 const nextConfig = {
   images: {
-    remotePatterns: supabaseHostname ? [{ protocol: "https", hostname: supabaseHostname, pathname: "/storage/v1/object/public/**" }] : [],
+    formats: ["image/webp"],
+    deviceSizes: [640, 828, 1080, 1440, 1920],
+    imageSizes: [96, 128, 256, 384],
+    minimumCacheTTL: 60 * 60 * 24 * 30,
+    remotePatterns,
   },
 };
 export default nextConfig;

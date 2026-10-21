@@ -3,6 +3,24 @@
 /* eslint-disable @next/next/no-img-element */
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import PetImage from "../pet-image";
+
+const MAX_SIDE = 1600;
+
+// Convierte cualquier imagen a WebP (máx. 1600 px) en el navegador antes de subirla.
+async function toWebp(file) {
+  const bitmap = await createImageBitmap(file).catch(() => null);
+  if (!bitmap) return file;
+  const scale = Math.min(1, MAX_SIDE / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close?.();
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/webp", 0.82));
+  if (!blob || blob.type !== "image/webp") return file;
+  return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".webp", { type: "image/webp" });
+}
 
 const emptyPet = {
   name: "", species: "Perro", breed: "", age: "", gender: "Hembra", size: "Mediano",
@@ -37,11 +55,13 @@ export default function AdminPanel() {
     setError("");
     if (!file) { setImageFile(null); setImagePreview(""); return; }
     if (!file.type.startsWith("image/")) { setError("Elegí un archivo de imagen."); event.target.value = ""; return; }
-    if (file.size > 5 * 1024 * 1024) { setError("La imagen debe pesar menos de 5 MB."); event.target.value = ""; return; }
+    if (file.size > 20 * 1024 * 1024) { setError("La imagen es demasiado grande (máx. 20 MB)."); event.target.value = ""; return; }
     setImageFile(file); setImagePreview(URL.createObjectURL(file));
   }
 
-  async function uploadImage(file) {
+  async function uploadImage(original) {
+    const file = await toWebp(original);
+    if (file.size > 5 * 1024 * 1024) throw new Error("La imagen sigue pesando más de 5 MB después de optimizarla. Probá con otra.");
     const response = await fetch("/api/admin/upload", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contentType: file.type, size: file.size }),
@@ -177,12 +197,12 @@ export default function AdminPanel() {
           <div className="form-pair"><label>Raza<input name="breed" required maxLength="120" value={petForm.breed} onChange={(event) => setPetForm({ ...petForm, breed: event.target.value })} placeholder="Raza o mestizo"/></label><label>Género<select name="gender" value={petForm.gender} onChange={(event) => setPetForm({ ...petForm, gender: event.target.value })}><option>Hembra</option><option>Macho</option></select></label></div>
           <div className="form-pair"><label>Tamaño<select name="size" value={petForm.size} onChange={(event) => setPetForm({ ...petForm, size: event.target.value })}><option>Pequeño</option><option>Mediano</option><option>Grande</option></select></label><label>Salud<input name="health" maxLength="120" value={petForm.health} onChange={(event) => setPetForm({ ...petForm, health: event.target.value })} placeholder="Vacunada, sana…"/></label></div>
           <label>Descripción<textarea name="description" rows="3" required maxLength="1200" value={petForm.description} onChange={(event) => setPetForm({ ...petForm, description: event.target.value })} placeholder="Personalidad, cuidados y lo que la hace única"/></label>
-          <label>Foto de la mascota<input key={fileInputKey} name="imageFile" type="file" accept="image/jpeg,image/png,image/webp,image/avif,image/gif" required={!petForm.imageUrl} onChange={pickImage}/><span className="form-hint">{editingPet ? "Elegí una nueva foto solo si querés reemplazar la actual. " : ""}JPG, PNG, WEBP, AVIF o GIF, hasta 5 MB.</span></label>
+          <label>Foto de la mascota<input key={fileInputKey} name="imageFile" type="file" accept="image/jpeg,image/png,image/webp,image/avif,image/gif" required={!petForm.imageUrl} onChange={pickImage}/><span className="form-hint">{editingPet ? "Elegí una nueva foto solo si querés reemplazar la actual. " : ""}Se convierte a WebP automáticamente.</span></label>
           {(imagePreview || petForm.imageUrl) && <div className="pet-image-preview"><img src={imagePreview || petForm.imageUrl} alt="Vista previa de la mascota"/><span>{imagePreview ? "Nueva foto (se sube al guardar)" : "Foto actual"}</span></div>}
           <button className="admin-primary" disabled={busy}>{busy ? (imageFile ? "Subiendo foto…" : "Guardando…") : editingPet ? "Guardar cambios" : "Publicar mascota"}</button>
         </form>
       </section>
-      {pets.length ? <section className="pet-admin-grid">{pets.map((pet) => <article className={`pet-admin-card ${!pet.isAvailable ? "paused" : ""}`} key={pet.id}><div className="pet-admin-image"><img src={pet.imageUrl || pet.image} alt={pet.name}/><span>{pet.isAvailable ? "Disponible" : "Pausada"}</span></div><div className="pet-admin-copy"><span className="section-kicker">{pet.species} · {pet.size}</span><h3>{pet.name}</h3><p>{pet.breed} · {pet.age} {pet.age === 1 ? "año" : "años"} · {pet.gender}</p><p className="pet-admin-description">{pet.description}</p><div className="pet-admin-actions"><button onClick={() => editPet(pet)}>Editar ficha</button><button className={pet.isAvailable ? "archive" : "restore"} onClick={() => toggleAvailability(pet)}>{pet.isAvailable ? "Pausar" : "Reactivar"}</button></div></div></article>)}</section> : <div className="admin-empty">Todavía no hay mascotas. Completá la ficha para publicar la primera.</div>}
+      {pets.length ? <section className="pet-admin-grid">{pets.map((pet) => <article className={`pet-admin-card ${!pet.isAvailable ? "paused" : ""}`} key={pet.id}><div className="pet-admin-image"><PetImage src={pet.imageUrl || pet.image} alt={pet.name} sizes="132px"/><span>{pet.isAvailable ? "Disponible" : "Pausada"}</span></div><div className="pet-admin-copy"><span className="section-kicker">{pet.species} · {pet.size}</span><h3>{pet.name}</h3><p>{pet.breed} · {pet.age} {pet.age === 1 ? "año" : "años"} · {pet.gender}</p><p className="pet-admin-description">{pet.description}</p><div className="pet-admin-actions"><button onClick={() => editPet(pet)}>Editar ficha</button><button className={pet.isAvailable ? "archive" : "restore"} onClick={() => toggleAvailability(pet)}>{pet.isAvailable ? "Pausar" : "Reactivar"}</button></div></div></article>)}</section> : <div className="admin-empty">Todavía no hay mascotas. Completá la ficha para publicar la primera.</div>}
     </> : applications.length ? <section className="admin-table">{applications.map((item) => <article key={item.id} className="admin-card"><div><h3>{item.petName} <span className="admin-status">· {item.status}</span></h3><p><b>{item.name}</b> · {item.email} · {item.phone}</p>{item.message && <p>“{item.message}”</p>}<p>Recibida: {new Date(item.createdAt).toLocaleString("es-AR")}</p></div><div className="admin-actions"><button className="reject" disabled={item.status === "Rechazada"} onClick={() => updateStatus(item.id, "Rechazada")}>Rechazar</button><button className="approve" disabled={item.status === "Aprobada"} onClick={() => updateStatus(item.id, "Aprobada")}>Aprobar</button></div></article>)}</section> : <div className="admin-empty">Todavía no hay solicitudes de adopción.</div>}
   </main>;
 }
